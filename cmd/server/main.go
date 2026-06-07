@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/Andk228/wether/internal/client/http/geocoding"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -18,11 +20,27 @@ const httpPort = ":3000"
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	geocodingClient := geocoding.NewClient(httpClient)
+
 	r.Get("/{city}", func(w http.ResponseWriter, r *http.Request) {
 		city := chi.URLParam(r, "city")
 
-		fmt.Printf("Requested city: %s\n", city)
-		_, err := w.Write([]byte("welcome"))
+		resp, err := geocodingClient.GetCity(city)
+		if err != nil {
+			log.Print(err)
+		}
+
+		raw, err := json.Marshal(resp)
+		if err != nil {
+			log.Println(err)
+		}
+
+		_, err = w.Write(raw)
 		if err != nil {
 			log.Print(err)
 		}
@@ -72,7 +90,6 @@ func initJobs(scheduler gocron.Scheduler) ([]gocron.Job, error) {
 			},
 		),
 	)
-	fmt.Println("check")
 	if err != nil {
 		return nil, err
 	}
