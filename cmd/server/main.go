@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Andk228/wether/internal/client/http/geocoding"
+	openmeteo "github.com/Andk228/wether/internal/client/http/open_meteo"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -26,11 +27,17 @@ func main() {
 	}
 
 	geocodingClient := geocoding.NewClient(httpClient)
+	openmeteoClient := openmeteo.NewClient(httpClient)
 
 	r.Get("/{city}", func(w http.ResponseWriter, r *http.Request) {
 		city := chi.URLParam(r, "city")
 
-		resp, err := geocodingClient.GetCity(city)
+		resp, err := geocodingClient.GetCoordinates(city)
+		if err != nil {
+			log.Print(err)
+		}
+
+		meteoresp, err := openmeteoClient.GetTemperature(resp.Latitude, resp.Longitude)
 		if err != nil {
 			log.Print(err)
 		}
@@ -40,10 +47,22 @@ func main() {
 			log.Println(err)
 		}
 
+		meteoraw, err := json.Marshal(meteoresp)
+		if err != nil {
+			log.Println(err)
+
+		}
+
 		_, err = w.Write(raw)
 		if err != nil {
 			log.Print(err)
 		}
+
+		_, err = w.Write(meteoraw)
+		if err != nil {
+			log.Print(err)
+		}
+
 	})
 
 	s, err := gocron.NewScheduler()
