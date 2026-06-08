@@ -16,46 +16,57 @@ import (
 	"github.com/go-co-op/gocron/v2"
 )
 
-const httpPort = ":3000"
+const (
+	httpPort = ":3000"
+)
+
+type GivenCity struct {
+	city string
+	mu   sync.RWMutex
+}
+
+type MeteoValues struct {
+	Timestamp   time.Time
+	Temperature float64
+}
+
+type Storage struct {
+	data map[string][]MeteoValues
+	mu   sync.RWMutex
+}
 
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
+	storage := &Storage{
+		data: make(map[string][]MeteoValues),
 	}
 
-	geocodingClient := geocoding.NewClient(httpClient)
-	openmeteoClient := openmeteo.NewClient(httpClient)
+	givencity := &GivenCity{}
 
 	r.Get("/{city}", func(w http.ResponseWriter, r *http.Request) {
-		city := chi.URLParam(r, "city")
+		givencity.mu.Lock()
+		defer givencity.mu.Unlock()
 
-		resp, err := geocodingClient.GetCoordinates(city)
-		if err != nil {
-			log.Print(err)
+		givencity.city = chi.URLParam(r, "city")
+
+		fmt.Printf("Requested city %s\n", givencity.city)
+
+		storage.mu.RLock()
+		defer storage.mu.RUnlock()
+
+		mateoValues, ok := storage.data[givencity.city]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("not found"))
+			return
 		}
 
-		meteoresp, err := openmeteoClient.GetTemperature(resp.Latitude, resp.Longitude)
-		if err != nil {
-			log.Print(err)
-		}
-
-		raw, err := json.Marshal(resp)
+		meteoraw, err := json.Marshal(mateoValues)
 		if err != nil {
 			log.Println(err)
-		}
 
-		meteoraw, err := json.Marshal(meteoresp)
-		if err != nil {
-			log.Println(err)
-
-		}
-
-		_, err = w.Write(raw)
-		if err != nil {
-			log.Print(err)
 		}
 
 		_, err = w.Write(meteoraw)
@@ -70,7 +81,7 @@ func main() {
 		panic(err)
 	}
 
-	jobs, err := initJobs(s)
+	jobs, err := initJobs(s, storage, givencity)
 	if err != nil {
 		panic(err)
 	}
@@ -96,16 +107,44 @@ func main() {
 	wg.Wait()
 }
 
-func initJobs(scheduler gocron.Scheduler) ([]gocron.Job, error) {
+func initJobs(scheduler gocron.Scheduler, storage *Storage, givencity *GivenCity) ([]gocron.Job, error) {
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 
-	// add a job to the scheduler
+	geocodingClient := geocoding.NewClient(httpClient)
+	openmeteoClient := openmeteo.NewClient(httpClient)
 	j, err := scheduler.NewJob(
 		gocron.DurationJob(
 			10*time.Second,
 		),
 		gocron.NewTask(
 			func() {
-				fmt.Println("New task")
+				givencity.mu.RLock()
+				defer givencity.mu.RUnlock()
+				resp, err := geocodingClient.GetCoordinates(givencity.city)
+				if err != nil {
+					log.Print(err)
+				}
+
+				meteoresp, err := openmeteoClient.GetTemperature(resp.Latitude, resp.Longitude)
+				if err != nil {
+					log.Print(err)
+				}
+
+				storage.mu.Lock()
+				defer storage.mu.Unlock()
+
+				timestamp, err := time.Parse("2006-01-2T15:04", meteoresp.Current.Time)
+				if err != nil {
+					log.Println(err)
+				}
+
+				storage.data[givencity.city] = append(storage.data[givencity.city], MeteoValues{
+					Timestamp:   timestamp,
+					Temperature: meteoresp.Current.Temperature2m,
+				})
+				fmt.Println("Data was updated")
 			},
 		),
 	)
@@ -116,23 +155,3 @@ func initJobs(scheduler gocron.Scheduler) ([]gocron.Job, error) {
 	return []gocron.Job{j}, nil
 
 }
-
-// func runCron() error {
-// 	// each job has a unique id
-// 	fmt.Println(j.ID())
-
-// 	// start the scheduler
-// 	s.Start()
-// 	// block until you are ready to shut down
-// 	select {
-// 	case <-time.After(time.Minute):
-// 	}
-
-// 	// when you're done, shut it down
-// 	err = s.Shutdown()
-// 	// or for context-aware teardown:
-// 	// err = s.ShutdownWithContext(ctx)
-// 	if err != nil {
-// 		// handle error
-// 	}
-// }
