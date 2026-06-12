@@ -11,5 +11,20 @@ services:
     volumes:
       - test_volume:/var/lib/postgresql
 
+# Добавить сборку самого сервиса, который будет использовать базу данных
+  app:
+    build: .
+    restart: always
+    depends_on:
+      - pg
+    environment:
+      DB_HOST: pg
+      DB_PORT: 5432
+      DB_USER: andk228
+      DB_PASSWORD: password
+      DB_NAME: weather
+    ports:
+      - "3000:3000"
+
 volumes:
   test_volume: {}

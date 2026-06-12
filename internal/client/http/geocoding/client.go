@@ -49,6 +49,9 @@ func (c *client) GetCoordinates(city string) (Response, error) {
 		return Response{}, err
 	}
 
-	return geoResp.Results[0], nil
+	if len(geoResp.Results) == 0 {
+		return Response{}, fmt.Errorf("no geocoding results for %q", city)
+	}
 
+	return geoResp.Results[0], nil
 }

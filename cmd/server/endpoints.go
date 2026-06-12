@@ -23,6 +23,7 @@ func startEndpointUpdater(ctx context.Context, conn *pgx.Conn) http.Handler {
 		defer givencity.mu.Unlock()
 
 		givencity.city = chi.URLParam(r, "city")
+		givencity.processingCities = append(givencity.processingCities, givencity.city)
 
 		fmt.Printf("Requested city %s\n", givencity.city)
 
