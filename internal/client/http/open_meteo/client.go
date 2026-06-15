@@ -14,6 +14,7 @@ type Response struct {
 	Current struct {
 		Time          string  `json:"time"`
 		Temperature2m float64 `json:"temperature_2m"`
+		WindSpeed     float64 `json:"wind_speed_10m"`
 	}
 }
 
@@ -23,9 +24,9 @@ func NewClient(httpClient *http.Client) *client {
 	}
 }
 
-func (c *client) GetTemperature(lat, long float64) (Response, error) {
+func (c *client) GetMeteoResp(lat, long float64) (Response, error) {
 	res, err := c.httpClient.Get(
-		fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m",
+		fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m,wind_speed_10m",
 			lat,
 			long,
 		),

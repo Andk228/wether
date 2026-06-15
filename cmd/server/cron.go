@@ -33,7 +33,18 @@ func startCron(ctx context.Context, conn *pgx.Conn) error {
 }
 
 func initJobs(ctx context.Context, scheduler gocron.Scheduler, conn *pgx.Conn) ([]gocron.Job, error) {
+	// transport := &http.Transport{
+	// 	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	// 		return (&net.Dialer{
+	// 			Timeout:   10 * time.Second,
+	// 			KeepAlive: 30 * time.Second,
+	// 		}).DialContext(ctx, "tcp4", addr)
+	// 	},
+	// 	TLSHandshakeTimeout: 15 * time.Second,
+	// }
+
 	httpClient := &http.Client{
+		// Transport: transport,
 		Timeout: 10 * time.Second,
 	}
 
@@ -45,27 +56,35 @@ func initJobs(ctx context.Context, scheduler gocron.Scheduler, conn *pgx.Conn) (
 		),
 		gocron.NewTask(
 			func() {
-				givencity.mu.RLock()
-				defer givencity.mu.RUnlock()
-				resp, err := geocodingClient.GetCoordinates(givencity.city)
-				if err != nil {
-					log.Print(err)
-				}
+				givencity.mu.Lock()
+				cities := append([]string(nil), givencity.processingCities...)
+				givencity.processingCities = nil
+				givencity.mu.Unlock()
 
-				meteoresp, err := openmeteoClient.GetTemperature(resp.Latitude, resp.Longitude)
-				if err != nil {
-					log.Print(err)
-				}
+				for _, city := range cities {
+					resp, err := geocodingClient.GetCoordinates(city)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
 
-				timestamp, err := time.Parse("2006-01-2T15:04", meteoresp.Current.Time)
-				if err != nil {
-					log.Println(err)
-				}
+					meteoresp, err := openmeteoClient.GetMeteoResp(resp.Latitude, resp.Longitude)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
 
-				_, err = conn.Exec(ctx, "INSERT INTO meteovalues (city, timestamp, temperature) VALUES ($1, $2, $3)",
-					givencity.city, timestamp, meteoresp.Current.Temperature2m)
-				if err != nil {
-					log.Print(err)
+					timestamp, err := time.Parse("2006-01-2T15:04", meteoresp.Current.Time)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+
+					_, err = conn.Exec(ctx, "INSERT INTO meteovalues (city, timestamp, temperature, windspeed) VALUES ($1, $2, $3, $4)",
+						city, timestamp, meteoresp.Current.Temperature2m, meteoresp.Current.WindSpeed)
+					if err != nil {
+						log.Print(err)
+					}
 				}
 
 				fmt.Println("Data was updated")
