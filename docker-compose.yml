@@ -7,16 +7,21 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: "weather"
     ports:
-      - "5433:5432"
-    volumes:
-      - test_volume:/var/lib/postgresql
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U andk228 -d weather"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # volumes:
+    #   - test_volume:/var/lib/postgresql
 
-# Добавить сборку самого сервиса, который будет использовать базу данных
   app:
     build: .
     restart: always
     depends_on:
-      - pg
+      pg:
+        condition: service_healthy
     environment:
       DB_HOST: pg
       DB_PORT: 5432
@@ -26,5 +31,5 @@ services:
     ports:
       - "3000:3000"
 
-volumes:
-  test_volume: {}
+# volumes:
+#   test_volume: {}

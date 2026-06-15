@@ -30,9 +30,9 @@ func startEndpointUpdater(ctx context.Context, conn *pgx.Conn) http.Handler {
 		var meteoValues MeteoValues
 		err := conn.QueryRow(
 			ctx,
-			`SELECT city, timestamp, temperature FROM meteovalues 
+			`SELECT city, timestamp, temperature, windspeed FROM meteovalues 
 			WHERE city = $1 ORDER BY timestamp DESC LIMIT 1`,
-			givencity.city).Scan(&meteoValues.Name, &meteoValues.Timestamp, &meteoValues.Temperature)
+			givencity.city).Scan(&meteoValues.Name, &meteoValues.Timestamp, &meteoValues.Temperature, &meteoValues.WindSpeed)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				w.WriteHeader(http.StatusNotFound)

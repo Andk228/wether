@@ -23,7 +23,7 @@ func envOrDefault(key, def string) string {
 
 func buildConnStr() string {
 	dbHost := envOrDefault("DB_HOST", "localhost")
-	dbPort := envOrDefault("DB_PORT", "5433")
+	dbPort := envOrDefault("DB_PORT", "5432")
 	dbUser := envOrDefault("DB_USER", "andk228")
 	dbPassword := envOrDefault("DB_PASSWORD", "password")
 	dbName := envOrDefault("DB_NAME", "weather")
@@ -41,6 +41,7 @@ type MeteoValues struct {
 	Name        string    `db:"name"`
 	Timestamp   time.Time `db:"timestamp"`
 	Temperature float64   `db:"temperature"`
+	WindSpeed   float64   `db:windspeed`
 }
 
 var givencity = &GivenCity{}
@@ -50,7 +51,7 @@ func main() {
 	var err error
 
 	ctx := context.Background()
-	conn, err = connectToDB(ctx, buildConnStr())
+	conn, err = connectToDBWithRetry(ctx, buildConnStr(), 20, 3*time.Second)
 	if err != nil {
 		panic(err)
 	}
